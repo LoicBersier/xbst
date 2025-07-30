@@ -10,6 +10,8 @@ use std::{
 mod utils;
 
 use clap::Parser;
+use deunicode::AsciiChars;
+use file_format::{FileFormat, Kind};
 use thiserror::Error;
 use zerocopy::IntoBytes;
 
@@ -25,6 +27,8 @@ enum Errors {
     FromUtf8(#[from] FromUtf8Error),
     #[error("Skill issue on the programmer part ngl, report this to dev pls")]
     SkillIssue(),
+    #[error("Didn't find any file to convert, is your input folder structued correctly?")]
+    NoFileToConvert(),
 
     #[error("You are missing ffprobe in your PATH")]
     MissingFfprobe(#[source] std::io::Error),
@@ -50,7 +54,8 @@ fn main() {
     let args = Args::parse();
 
     println!(
-        "⠀⠀⠀⠂⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        "
+⠀⠀⠀⠂⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠈⠲⣥⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⠖⠁⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠘⠿⣿⣷⣦⣀⡀⠀⠀⢀⣠⣴⣾⣿⠟⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀⠀
@@ -91,6 +96,7 @@ fn process(args: &Args) -> Result<(), Errors> {
     for (i, soundtrack_dirs) in music_directory.enumerate() {
         let soundtrack = soundtrack_dirs.map_err(Errors::UnknownFolder)?.path();
 
+        // Ignore non folders for soundtracks
         if !soundtrack.is_dir() {
             continue;
         }
@@ -98,12 +104,16 @@ fn process(args: &Args) -> Result<(), Errors> {
         soundtrack_count += 1;
         song_group_id = 0;
 
-        // Convert the folder name into 2 bytes
-        let mut soundtrack_name = soundtrack
+        let soundtrack_name_str = soundtrack
             .file_name()
             .map_or(OsStr::new("Unknown soundtrack"), |f| f)
             .to_string_lossy()
             .trim()
+            .ascii_chars()
+            .to_string();
+
+        // Convert the folder name into 2 bytes
+        let mut soundtrack_name = soundtrack_name_str
             .bytes()
             .map(|b| [b, 0])
             .collect::<Vec<[u8; 2]>>();
@@ -126,14 +136,29 @@ fn process(args: &Args) -> Result<(), Errors> {
             let mut char_count = 0;
             song_time_miliseconds = [0; 6];
 
-            song_files.iter().enumerate().for_each(|(g, f)| {
+            for (g, f) in song_files.iter().enumerate() {
                 let song = f.as_ref().unwrap();
+                let song_path = song.path();
 
-                song_id[g] = total_songs_count as i32;
-                song_time_miliseconds[g] = match get_duration(song.path()) {
-                    Ok(s) => s,
+                // Get file format kind for the files inside soundtracks
+                let format = match FileFormat::from_file(&song_path).map_err(Errors::UnknownIO) {
+                    Ok(f) => f.kind(),
                     Err(e) => {
                         eprintln!("\x1b[0;31m{}\x1b[0;20m", e);
+                        Kind::Other
+                    }
+                };
+
+                // Ignore non audio kind
+                if format != Kind::Audio {
+                    continue;
+                }
+
+                song_id[g] = total_songs_count as i32;
+                song_time_miliseconds[g] = match get_duration(song_path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("\x1b[0;31mFailed to get duration: {}\x1b[0;20m", e);
                         0
                     }
                 };
@@ -145,7 +170,9 @@ fn process(args: &Args) -> Result<(), Errors> {
                 let filename = filepath
                     .file_stem()
                     .map_or(OsStr::new("Unknown track"), |f| f)
-                    .to_string_lossy();
+                    .to_string_lossy()
+                    .ascii_chars()
+                    .to_string();
 
                 let mut name = filename.trim().bytes().collect::<Vec<u8>>();
                 name.resize(32, 0);
@@ -157,10 +184,11 @@ fn process(args: &Args) -> Result<(), Errors> {
 
                 files_to_convert.push(MusicFile {
                     path: song.path(),
+                    soundtrack_name: soundtrack_name_str.clone(),
                     soundtrack_index: 0,
                     index: total_songs_count - 1,
                 });
-            });
+            }
 
             let s = Song {
                 magic: 200819,
@@ -223,6 +251,10 @@ fn process(args: &Args) -> Result<(), Errors> {
         padding: [char::MIN; 24],
     };
 
+    if files_to_convert.len() == 0 {
+        return Err(Errors::NoFileToConvert());
+    }
+
     write_database(&args.output, header, soundtracks, songs)?;
 
     for f in files_to_convert {
@@ -245,16 +277,17 @@ fn process(args: &Args) -> Result<(), Errors> {
         );
 
         print!(
-            "{}\r{}Processing {} ",
+            "{}\r{}Processing {} - {}",
             "\x1B[1B",
             "\x1B[K",
+            f.soundtrack_name,
             f.path
                 .file_stem()
                 .map_or(OsStr::new("Unknown track"), |f| f)
                 .to_string_lossy()
         );
 
-        let _ = stdout().flush().map_err(Errors::UnknownIO);
+        stdout().flush().map_err(Errors::UnknownIO)?;
 
         convert_to_wma(
             f.path,
@@ -300,7 +333,8 @@ fn convert_to_wma(
     let binding = input.into_os_string();
     let input = binding.to_str().unwrap();
 
-    fs::create_dir_all(format!("{}/{:0>4}", output, soundtrack_index)).unwrap();
+    fs::create_dir_all(format!("{}/{:0>4}", output, soundtrack_index))
+        .map_err(Errors::UnknownIO)?;
 
     Command::new("ffmpeg")
         .args([
