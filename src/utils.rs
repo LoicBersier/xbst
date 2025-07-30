@@ -5,15 +5,11 @@ use zerocopy::TryFromBytes;
 pub struct MusicFile {
     pub path: PathBuf,
     pub soundtrack_index: u32,
+    pub soundtrack_name: String,
     pub index: u32,
 }
 
-#[derive(Debug, TryFromBytes)]
-#[repr(C)]
-pub struct Database {
-    pub header: Header,
-    pub soundtrack: Soundtrack,
-}
+// https://xboxdevwiki.net/Soundtracks#ST.DB
 
 #[derive(Debug, TryFromBytes)]
 #[repr(C)]
