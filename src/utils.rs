@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use zerocopy::TryFromBytes;
+use zerocopy::{Immutable, IntoBytes};
 
 pub struct MusicFile {
     pub path: PathBuf,
@@ -10,8 +10,7 @@ pub struct MusicFile {
 }
 
 // https://xboxdevwiki.net/Soundtracks#ST.DB
-
-#[derive(Debug, TryFromBytes)]
+#[derive(Debug, Immutable, IntoBytes)]
 #[repr(C)]
 pub struct Header {
     pub magic: i32,
@@ -22,7 +21,7 @@ pub struct Header {
     pub padding: [char; 24],
 }
 
-#[derive(Debug, TryFromBytes)]
+#[derive(Debug, Immutable, IntoBytes)]
 #[repr(C)]
 pub struct Soundtrack {
     pub magic: i32,
@@ -34,7 +33,7 @@ pub struct Soundtrack {
     pub padding: [char; 24],
 }
 
-#[derive(Debug, TryFromBytes)]
+#[derive(Debug, Immutable, IntoBytes)]
 #[repr(C)]
 pub struct Song {
     pub magic: i32,
@@ -45,4 +44,49 @@ pub struct Song {
     pub song_time_miliseconds: [i32; 6],
     pub song_name: [[u8; 2]; 192],
     pub cpadding: [char; 16],
+}
+
+impl Default for Header {
+    #[inline]
+    fn default() -> Header {
+        Header {
+            magic: 0,
+            num_soundtracks: 0,
+            next_soundtrack_id: 0,
+            soundtrack_ids: [0; 100],
+            next_song_id: 0,
+            padding: [char::MIN; 24],
+        }
+    }
+}
+
+impl Default for Soundtrack {
+    #[inline]
+    fn default() -> Soundtrack {
+        Soundtrack {
+            magic: 0,
+            id: 0,
+            num_songs: 0,
+            song_groups_ids: [0; 84],
+            total_time_miliseconds: 0,
+            name: [[0; 2]; 32],
+            padding: [char::MIN; 24],
+        }
+    }
+}
+
+impl Default for Song {
+    #[inline]
+    fn default() -> Song {
+        Song {
+            magic: 0,
+            soundtrack_id: 0,
+            id: 0,
+            ipadding: 0,
+            song_id: [0; 6],
+            song_time_miliseconds: [0; 6],
+            song_name: [[0; 2]; 192],
+            cpadding: [char::MIN; 16],
+        }
+    }
 }
