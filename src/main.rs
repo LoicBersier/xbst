@@ -27,7 +27,7 @@ enum Errors {
     FromUtf8(#[from] FromUtf8Error),
     #[error("Skill issue on the programmer part ngl, report this to dev pls")]
     SkillIssue(),
-    #[error("Didn't find any file to convert, is your input folder structued correctly?")]
+    #[error("Didn't find any file to convert, is your input folder structured correctly?")]
     NoFileToConvert(),
 
     #[error("You are missing ffprobe in your PATH")]
