@@ -46,7 +46,7 @@ struct Args {
     #[arg(default_value = "./output")]
     output: String,
     /// Bitrate for the output
-    #[arg(short, long, default_value_t = 192)]
+    #[arg(short, long, default_value_t = 128)]
     bitrate: i16,
 }
 
