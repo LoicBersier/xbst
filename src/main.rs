@@ -11,7 +11,6 @@ mod utils;
 
 use clap::Parser;
 use deunicode::AsciiChars;
-use file_format::{FileFormat, Kind};
 use thiserror::Error;
 use zerocopy::IntoBytes;
 
@@ -139,20 +138,6 @@ fn process(args: &Args) -> Result<(), Errors> {
             for (g, f) in song_files.iter().enumerate() {
                 let song = f.as_ref().unwrap();
                 let song_path = song.path();
-
-                // Get file format kind for the files inside soundtracks
-                let format = match FileFormat::from_file(&song_path).map_err(Errors::UnknownIO) {
-                    Ok(f) => f.kind(),
-                    Err(e) => {
-                        eprintln!("\x1b[0;31m{}\x1b[0;20m", e);
-                        Kind::Other
-                    }
-                };
-
-                // Ignore non audio kind
-                if format != Kind::Audio {
-                    continue;
-                }
 
                 song_id[g] = total_songs_count as i32;
                 song_time_miliseconds[g] = match get_duration(song_path) {
@@ -373,37 +358,15 @@ fn write_database(
     fs::create_dir_all(format!("{}/", &output)).map_err(Errors::UnknownIO)?;
     let mut database = File::create(format!("{}/ST.DB", &output)).map_err(Errors::UnknownIO)?;
 
-    database.write_all(&header.magic.as_bytes())?;
-    database.write_all(&header.num_soundtracks.as_bytes())?;
-    database.write_all(&header.next_soundtrack_id.as_bytes())?;
-    database.write_all(&header.soundtrack_ids.as_bytes())?;
-    database.write_all(&header.next_song_id.as_bytes())?;
-    database.write_all(&header.padding.as_bytes())?;
+    database.write_all(header.as_bytes())?;
 
-    for st in &soundtracks {
-        database.write_all(&st.magic.as_bytes())?;
-        database.write_all(&st.id.as_bytes())?;
-        database.write_all(&st.num_songs.as_bytes())?;
-        database.write_all(&st.song_groups_ids.as_bytes())?;
-        database.write_all(&st.total_time_miliseconds.as_bytes())?;
-        database.write_all(&st.name.as_bytes())?;
-        database.write_all(&st.padding.as_bytes())?;
-    }
+    database.write_all(soundtracks.as_bytes())?;
 
     for _ in 0..100 - &soundtracks.len() {
         database.write_all(&[0 as u8; 512])?;
     }
 
-    for s in songs {
-        database.write_all(&s.magic.as_bytes())?;
-        database.write_all(&s.soundtrack_id.as_bytes())?;
-        database.write_all(&s.id.as_bytes())?;
-        database.write_all(&s.ipadding.as_bytes())?;
-        database.write_all(&s.song_id.as_bytes())?;
-        database.write_all(&s.song_time_miliseconds.as_bytes())?;
-        database.write_all(&s.song_name.as_bytes())?;
-        database.write_all(&s.cpadding.as_bytes())?;
-    }
+    database.write_all(songs.as_bytes())?;
 
     Ok(())
 }
