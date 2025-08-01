@@ -14,7 +14,7 @@ use deunicode::AsciiChars;
 use thiserror::Error;
 use zerocopy::IntoBytes;
 
-use crate::utils::{Header, MusicFile, Song, Soundtrack};
+use crate::utils::{Codec, Header, MusicFile, Song, Soundtrack};
 
 #[derive(Error, Debug)]
 enum Errors {
@@ -47,6 +47,10 @@ struct Args {
     /// Bitrate for the output
     #[arg(short, long, default_value_t = 128)]
     bitrate: i16,
+    /// Codec to use for conversion
+    #[clap(value_enum)]
+    #[arg(short, long, default_value_t = Codec::Wmav2)]
+    codec: Codec,
 }
 
 fn main() {
@@ -283,6 +287,7 @@ fn process(args: &Args) -> Result<(), Errors> {
             f.path,
             &args.output,
             args.bitrate,
+            &args.codec,
             f.soundtrack_index as usize,
             f.index as usize,
         )?;
@@ -317,6 +322,7 @@ fn convert_to_wma(
     input: PathBuf,
     output: &String,
     bitrate: i16,
+    codec: &Codec,
     soundtrack_index: usize,
     song_index: usize,
 ) -> Result<(), Errors> {
@@ -331,7 +337,7 @@ fn convert_to_wma(
             "-i",
             input,
             "-acodec",
-            "wmav1",
+            &codec.to_string(),
             "-ac",
             "2",
             "-ar",

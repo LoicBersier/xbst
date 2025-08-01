@@ -9,6 +9,21 @@ pub struct MusicFile {
     pub index: u32,
 }
 
+#[derive(clap::ValueEnum, Debug, Clone)]
+pub enum Codec {
+    Wmav1,
+    Wmav2,
+}
+
+impl ToString for Codec {
+    fn to_string(&self) -> String {
+        match self {
+            Codec::Wmav1 => String::from("wmav1"),
+            Codec::Wmav2 => String::from("wmav2"),
+        }
+    }
+}
+
 // https://xboxdevwiki.net/Soundtracks#ST.DB
 #[derive(Debug, Immutable, IntoBytes)]
 #[repr(C)]
