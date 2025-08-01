@@ -139,6 +139,11 @@ fn process(args: &Args) -> Result<(), Errors> {
                 let song = f.as_ref().unwrap();
                 let song_path = song.path();
 
+                // Ignore non files for song groups
+                if !song_path.is_file() {
+                    continue;
+                }
+
                 song_id[g] = total_songs_count as i32;
                 song_time_miliseconds[g] = match get_duration(song_path) {
                     Ok(s) => s,
